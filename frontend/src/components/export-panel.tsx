@@ -66,7 +66,7 @@ export function ExportPanel({ job, onExport }: ExportPanelProps) {
 
   const handleFormatToggle = (formatId: string, checked: boolean) => {
     if (checked) {
-      setSelectedFormats(prev => [...prev, formatId]);
+      setSelectedFormats(prev => [...new Set([...prev, formatId])]);
     } else {
       setSelectedFormats(prev => prev.filter(id => id !== formatId));
     }
@@ -166,125 +166,39 @@ export function ExportPanel({ job, onExport }: ExportPanelProps) {
             {exportFormats.map((format) => (
               <div
                 key={format.id}
-                className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
               >
-                <Checkbox
-                  id={format.id}
-                  checked={selectedFormats.includes(format.id)}
-                  onCheckedChange={(checked) => handleFormatToggle(format.id, !!checked)}
-                  disabled={!canExport || isExporting}
-                />
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2">
-                    {format.icon}
-                    <label
-                      htmlFor={format.id}
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      {format.name}
-                    </label>
-                    <Badge variant="outline" className="text-xs">
-                      {format.fileExtension}
-                    </Badge>
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {format.icon}
+                  <div className="space-y-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium truncate">{format.name}</div>
+                      <Badge variant="outline" className="text-xs">{format.fileExtension}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">{format.description}</p>
+                    <p className="text-xs text-muted-foreground">Estimated size: {format.estimatedSize}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {format.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Estimated size: {format.estimatedSize}
-                  </p>
+                </div>
+                <div className="shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      if (!canExport || isExporting) return;
+                      setSelectedFormats([format.id]);
+                      await handleExport();
+                    }}
+                    disabled={!canExport || isExporting}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
                 </div>
               </div>
             ))}
           </div>
-
-          <div className="pt-4 border-t">
-            <Button
-              onClick={handleExport}
-              disabled={!canExport || selectedFormats.length === 0 || isExporting}
-              className="w-full"
-            >
-              {isExporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Generating Export...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  {selectedFormats.length > 1
-                    ? `Download ZIP (${selectedFormats.length} files)`
-                    : `Download ${selectedFormats[0] === 'json' ? 'JSON' : selectedFormats[0] === 'csv' ? 'CSV' : 'Markdown'}`}
-                </>
-              )}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Export History */}
-      {job.status === 'completed' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Previous Exports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2 border rounded">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm">Full Export (All Formats)</span>
-                  <Badge variant="outline" className="text-xs">2.3 MB</Badge>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  2 hours ago
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-2 border rounded">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-sm">Markdown Only</span>
-                  <Badge variant="outline" className="text-xs">456 KB</Badge>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Yesterday
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Export Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle>What's Included</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Clean, readable content from each page</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Page metadata (title, description, URL)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Extracted links and images with alt text</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Crawl timestamp and processing stats</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Manifest file with export details</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
