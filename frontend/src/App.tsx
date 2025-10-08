@@ -25,11 +25,14 @@ export default function App() {
     // Carga inicial
     setJobs(JobService.getJobs());
 
-    // Polling simple
-    const interval = setInterval(() => {
+    // Polling simple: sincroniza estado del job con backend y trae logs
+    const interval = setInterval(async () => {
+      const current = JobService.getJobs();
+      // sincroniza todos los jobs visibles
+      await Promise.all(current.map(j => JobService.syncJobFromBackend(j.id)));
       setJobs(JobService.getJobs());
-      if (selectedJobId) setLogs(JobService.getJobLogs(selectedJobId));
-    }, 1200);
+      if (selectedJobId) setLogs(await JobService.getJobLogs(selectedJobId));
+    }, 1500);
 
     return () => clearInterval(interval);
   }, [selectedJobId]);
@@ -65,9 +68,9 @@ export default function App() {
     }
   };
 
-  const handleJobSelect = (jobId: string) => {
+  const handleJobSelect = async (jobId: string) => {
     setSelectedJobId(jobId);
-    setLogs(JobService.getJobLogs(jobId));
+    setLogs(await JobService.getJobLogs(jobId));
     setActiveTab('progress');
   };
 
@@ -81,7 +84,34 @@ export default function App() {
         'markdown-book': 'md',
       };
 
-      results.forEach(({ format, url }) => {
+      if (results.length > 1) {
+        // Descarga múltiple: generar ZIP en cliente
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        await Promise.all(
+          results.map(async ({ format, url }) => {
+            const ext = extByFormat[format] || 'txt';
+            const filename = `crawl-job-${jobId}-export.${ext}`;
+            const resp = await fetch(url, { mode: 'cors' });
+            if (!resp.ok) throw new Error(`Failed to fetch ${filename}`);
+            const data = await resp.arrayBuffer();
+            zip.file(filename, data);
+          })
+        );
+
+        const blob = await zip.generateAsync({ type: 'blob' });
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = `crawl-job-${jobId}-export.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+      } else if (results.length === 1) {
+        // Único archivo: descarga directa
+        const { format, url } = results[0];
         const ext = extByFormat[format] || 'txt';
         const a = document.createElement('a');
         a.href = url;
@@ -89,7 +119,7 @@ export default function App() {
         document.body.appendChild(a);
         a.click();
         a.remove();
-      });
+      }
 
       toast.success('Export generated successfully');
     } catch (error) {
