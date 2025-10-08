@@ -73,15 +73,23 @@ export default function App() {
 
   const handleExportJob = async (jobId: string, formats: string[]) => {
     try {
-      const downloadUrl = await JobService.exportJob(jobId, formats);
+      const results = await JobService.exportJob(jobId, formats);
 
-      // ✅ No forzar .zip; usar nombre genérico
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `crawl-job-${jobId}-export`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      const extByFormat: Record<string, string> = {
+        json: 'json',
+        csv: 'csv',
+        'markdown-book': 'md',
+      };
+
+      results.forEach(({ format, url }) => {
+        const ext = extByFormat[format] || 'txt';
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `crawl-job-${jobId}-export.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      });
 
       toast.success('Export generated successfully');
     } catch (error) {
