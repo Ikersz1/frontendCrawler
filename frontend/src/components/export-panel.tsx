@@ -212,7 +212,9 @@ export function ExportPanel({ job, onExport }: ExportPanelProps) {
               ) : (
                 <>
                   <Download className="h-4 w-4 mr-2" />
-                  Download Selected Files ({selectedFormats.length})
+                  {selectedFormats.length > 1
+                    ? `Download ZIP (${selectedFormats.length} files)`
+                    : `Download ${selectedFormats[0] === 'json' ? 'JSON' : selectedFormats[0] === 'csv' ? 'CSV' : 'Markdown'}`}
                 </>
               )}
             </Button>
