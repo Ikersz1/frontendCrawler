@@ -288,31 +288,43 @@ export const JobService = {
     return logs.filter(l => l.jobId === jobId).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   },
 
-  async exportJob(jobId: string, formats: string[]): Promise<string> {
+  async exportJob(jobId: string, formats: string[]): Promise<Array<{ format: string; url: string }>> {
     const job = jobs.find(j => j.id === jobId);
     if (!job) throw new Error('Job not found');
 
     if (USE_MOCK) {
-      // Mock: genera un blob descargable
-      const mock = {
-        jobId,
-        formats,
-        exportedAt: new Date().toISOString(),
-        files: formats.map(f => ({ format: f, filename: `export.${f}`, size: 12_345 }))
-      };
-      const blob = new Blob([JSON.stringify(mock, null, 2)], { type: 'application/json' });
-      return URL.createObjectURL(blob);
+      // Mock: genera un blob por formato solicitado
+      return formats.map((f) => {
+        const mock = {
+          jobId,
+          format: f,
+          exportedAt: new Date().toISOString(),
+          file: { filename: `export.${f}`, size: 12_345 }
+        };
+        const blob = new Blob([JSON.stringify(mock, null, 2)], { type: 'application/json' });
+        return { format: f, url: URL.createObjectURL(blob) };
+      });
     }
 
-    // REAL: construimos link directo a all_results.*
-    const links = ['all_results.json', 'all_results.csv', 'all_results.md']
-      .map(fn => ({ fn, url: buildDownloadUrl(job.jobDir, fn) }))
-      .filter(x => !!x.url) as { fn: string; url: string }[];
+    // REAL: construimos links por formato solicitado
+    const formatToFilename: Record<string, string> = {
+      json: 'all_results.json',
+      csv: 'all_results.csv',
+      'markdown-book': 'all_results.md',
+    };
 
-    if (!links.length) throw new Error('No download links available for this job.');
+    const requested = formats.filter((f) => f in formatToFilename);
+    const links = requested
+      .map((f) => {
+        const fn = formatToFilename[f];
+        const url = buildDownloadUrl(job.jobDir, fn);
+        return url ? { format: f, url } : null;
+      })
+      .filter(Boolean) as Array<{ format: string; url: string }>;
 
-    // Devuelve el primero (o puedes devolver un listado y pintarlo en UI)
-    return links[0].url;
+    if (!links.length) throw new Error('No download links available for requested formats.');
+
+    return links;
   },
 
   getJobPages(jobId: string): CrawledPage[] {
