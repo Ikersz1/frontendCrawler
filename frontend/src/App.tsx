@@ -25,14 +25,11 @@ export default function App() {
     // Carga inicial
     setJobs(JobService.getJobs());
 
-    // Polling simple: sincroniza estado del job con backend y trae logs
-    const interval = setInterval(async () => {
-      const current = JobService.getJobs();
-      // sincroniza todos los jobs visibles
-      await Promise.all(current.map(j => JobService.syncJobFromBackend(j.id)));
+    // Polling simple
+    const interval = setInterval(() => {
       setJobs(JobService.getJobs());
-      if (selectedJobId) setLogs(await JobService.getJobLogs(selectedJobId));
-    }, 1500);
+      if (selectedJobId) setLogs(JobService.getJobLogs(selectedJobId));
+    }, 1200);
 
     return () => clearInterval(interval);
   }, [selectedJobId]);
@@ -68,9 +65,9 @@ export default function App() {
     }
   };
 
-  const handleJobSelect = async (jobId: string) => {
+  const handleJobSelect = (jobId: string) => {
     setSelectedJobId(jobId);
-    setLogs(await JobService.getJobLogs(jobId));
+    setLogs(JobService.getJobLogs(jobId));
     setActiveTab('progress');
   };
 
