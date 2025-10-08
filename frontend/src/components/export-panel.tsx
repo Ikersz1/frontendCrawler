@@ -20,7 +20,7 @@ import type { CrawlJob } from '../services/job-service';
 
 interface ExportPanelProps {
   job: CrawlJob;
-  onExport: (jobId: string, formats: string[]) => void;
+  onExport: (jobId: string, formats: string[]) => Promise<void>;
 }
 
 interface ExportFormat {
@@ -33,19 +33,11 @@ interface ExportFormat {
 }
 
 export function ExportPanel({ job, onExport }: ExportPanelProps) {
-  const [selectedFormats, setSelectedFormats] = useState<string[]>(['markdown']);
+  const [selectedFormats, setSelectedFormats] = useState<string[]>(['markdown-book']);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
 
   const exportFormats: ExportFormat[] = [
-    {
-      id: 'markdown',
-      name: 'Individual Markdown Files',
-      description: 'One .md file per crawled page with clean content',
-      icon: <FileText className="h-4 w-4" />,
-      fileExtension: '.md',
-      estimatedSize: `~${Math.round(job.counts.crawled * 2.5)}KB`
-    },
     {
       id: 'markdown-book',
       name: 'Merged Markdown Book',
@@ -220,7 +212,7 @@ export function ExportPanel({ job, onExport }: ExportPanelProps) {
               ) : (
                 <>
                   <Download className="h-4 w-4 mr-2" />
-                  Download ZIP Archive ({selectedFormats.length} format{selectedFormats.length !== 1 ? 's' : ''})
+                  Download Selected Files ({selectedFormats.length})
                 </>
               )}
             </Button>
