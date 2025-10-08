@@ -10,7 +10,7 @@ import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import type { CrawlConfig } from '../services/job-service';
-import { postJSON } from '../services/api';
+import { JobService } from '../services/job-service';
 
 interface CrawlJobFormProps {
   onSubmit: (config: CrawlConfig) => void;
@@ -72,29 +72,13 @@ export function CrawlJobForm({ onSubmit }: CrawlJobFormProps) {
     }
 
     try {
-      // usa '/crawl' (sin hardcodear host) y deja que BASE_URL venga de VITE_API_URL en postJSON
-      const data = await postJSON<{ status: string; results?: Array<{ startUrl: string; jobDir: string; pages: number }>; error?: string }>(
-        '/crawl',
-        config
-      );
-
-      console.log('Crawler response:', data);
-      if (data.status === 'ok') {
-        alert('Crawl started successfully!');
-        const first = data.results?.[0];
-        if (first?.jobDir) {
-          const parts = first.jobDir.split(/[\\/]/);
-          const jobName = parts[parts.length - 1];
-          setLastJob({ jobName, jobDir: first.jobDir });
-        }
-        // opcional: notificar al padre si quieres mantener el callback
-        onSubmit?.(config);
-      } else {
-        alert('Error: ' + (data.error || 'Unknown error'));
-      }
+      // Inicia job asíncrono
+      const job = await JobService.createJob(config);
+      // notifica al padre (actualiza JobsList/Progress)
+      onSubmit?.(config);
     } catch (err: any) {
       console.error(err);
-      alert(`Failed to connect to backend: ${err?.message || err}`);
+      alert(`Failed to create job: ${err?.message || err}`);
     }
   };
 
