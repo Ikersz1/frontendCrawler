@@ -174,6 +174,18 @@ type BackendCrawlResult = {
   error?: string;
 };
 
+type BackendAsyncStart = { job_id: string };
+type BackendJobInfo = {
+  id: string;
+  name: string;
+  created_at: number;
+  status: { running: boolean; done: boolean; error: string | null };
+  counts: { crawled: number };
+  jobDir?: string | null;
+  startUrl?: string | null;
+};
+type BackendJobLogs = { logs: Array<{ ts: number; level: string; message: string }> };
+
 function jobFromBackend(config: CrawlConfig, r: { startUrl: string; jobDir: string; pages: number }): CrawlJob {
   const now = new Date();
   return {
@@ -222,8 +234,8 @@ export const JobService = {
       return job;
     }
 
-    // REAL: llamamos a /crawl/
-    const res = await fetch(`${API_URL}/crawl/`, {
+    // REAL: arrancamos job asíncrono en /crawl_async/
+    const res = await fetch(`${API_URL}/crawl_async/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config),
@@ -233,18 +245,21 @@ export const JobService = {
       const txt = await res.text().catch(() => '');
       throw new Error(`Backend error (${res.status}): ${txt || res.statusText}`);
     }
-    const data: BackendCrawlResult = await res.json();
-    if (data.status !== 'ok' || !data.results || data.results.length === 0) {
-      throw new Error(data.message || data.error || 'Unknown crawler error');
-    }
+    const data: BackendAsyncStart = await res.json();
+    if (!data.job_id) throw new Error('No job_id from backend');
 
-    // La API devuelve un objeto por cada startUrl.
-    // Para no romper tu UI “de a uno”, devolvemos el primero
-    // y guardamos todos en memoria para “JobsList”.
-    const completedJobs = data.results.map(r => jobFromBackend(config, r));
-    jobs = [...completedJobs, ...jobs]; // prepend
-    // Devolvemos el primero como “job creado”
-    return completedJobs[0];
+    const now = new Date();
+    const job: CrawlJob = {
+      id: data.job_id,
+      name: config.name || 'job',
+      config,
+      status: 'running',
+      createdAt: now,
+      startedAt: now,
+      counts: { crawled: 0, queued: 0, failed: 0 },
+    };
+    jobs.unshift(job);
+    return job;
   },
 
   getJobs(): CrawlJob[] {
@@ -283,9 +298,56 @@ export const JobService = {
     console.warn('Job control not supported by backend yet:', action);
   },
 
-  getJobLogs(jobId: string): JobLog[] {
-    // En real no tenemos endpoint, mantenemos logs locales
-    return logs.filter(l => l.jobId === jobId).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  async getJobInfo(jobId: string): Promise<BackendJobInfo | null> {
+    try {
+      const res = await fetch(`${API_URL}/jobs/${jobId}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  async syncJobFromBackend(jobId: string): Promise<void> {
+    const info = await this.getJobInfo(jobId);
+    if (!info) return;
+    const local = jobs.find(j => j.id === jobId);
+    if (!local) return;
+    local.counts.crawled = info.counts?.crawled ?? local.counts.crawled;
+    local.updatedAt = new Date();
+    if (info.status?.done) {
+      local.status = 'completed';
+      local.finishedAt = new Date();
+    }
+    if (info.status?.error) {
+      local.status = 'failed';
+      local.finishedAt = new Date();
+    }
+    if (info.jobDir) {
+      // backend guarda sólo la carpeta del job, normalizamos a misma semántica que buildDownloadUrl
+      local.jobDir = `output_crawler/${info.jobDir}`;
+    }
+    if (info.startUrl) local.startUrl = info.startUrl;
+  },
+
+  async getJobLogs(jobId: string): Promise<JobLog[]> {
+    try {
+      const res = await fetch(`${API_URL}/jobs/${jobId}/logs`);
+      if (!res.ok) return [];
+      const data: BackendJobLogs = await res.json();
+      const mapped: JobLog[] = data.logs.map((l, idx) => ({
+        id: `${jobId}-${idx}-${l.ts}`,
+        jobId,
+        level: (l.level as any) ?? 'info',
+        message: l.message,
+        timestamp: new Date(l.ts * 1000),
+      }));
+      // almacenamos pero devolvemos ordenado asc
+      logs = logs.filter(x => x.jobId !== jobId).concat(mapped);
+      return mapped.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    } catch {
+      return [];
+    }
   },
 
   async exportJob(jobId: string, formats: string[]): Promise<Array<{ format: string; url: string }>> {
